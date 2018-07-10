@@ -358,3 +358,15 @@ static int rel_type(int flags)
 	return flags & OUT_RLREL ? R_386_PC32 : R_386_32;
 }
 #endif
+
+#ifdef NEATCC_HENLO
+static void ehdr_init(Elf_Ehdr *ehdr)
+{
+	ehdr->e_machine = EM_386;
+}
+
+static int rel_type(int flags)
+{
+	return flags & OUT_RLREL ? R_386_PC32 : R_386_32;
+}
+#endif

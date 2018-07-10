@@ -263,6 +263,9 @@ void reg_done(void);
 #ifdef NEATCC_X86
 #include "x86.h"
 #endif
+#ifdef NEATCC_HENLO
+#include "henlo.h"
+#endif
 
 /* architecture-specific operations */
 long i_reg(long op, long *rd, long *r1, long *r2, long *r3, long *mt);
