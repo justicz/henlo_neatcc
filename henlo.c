@@ -157,7 +157,7 @@ static long i_jmp(long op, long r1, long r2)
 				jmp_instruction = OP3(I_BNZ, R_CMP, R_AC, JMP_REL);
 			} else if (comparison_type == 1) { // ge
 				op_typ(I_NEG, R_AC, R_CMP, 0);
-				op_typ(I_ADD, r1, R_CMP, R_CMP); // R_CMP = r1 - r2. branch if R_CMP !< 0
+				op_typ(I_ADD, r1, R_CMP, R_CMP); // R_CMP = r1 - r2. branch if R_CMP >= 0
 				i_load_acc_imm(0x8000);
 				op_typ(I_AND, R_AC, R_CMP, R_CMP);
 				jmp_instruction = OP3(I_BZ, R_CMP, R_AC, JMP_REL);
@@ -169,7 +169,7 @@ static long i_jmp(long op, long r1, long r2)
 				jmp_instruction = OP3(I_BNZ, R_CMP, R_AC, JMP_REL);
 			} else if (comparison_type == 4) { // le
 				op_typ(I_NEG, r1, R_CMP, 0);
-				op_typ(I_ADD, R_AC, R_CMP, R_CMP); // R_CMP = r2 - r1. branch if R_CMP < 0
+				op_typ(I_ADD, R_AC, R_CMP, R_CMP); // R_CMP = r2 - r1. branch if R_CMP >= 0
 				i_load_acc_imm(0x8000);
 				op_typ(I_AND, R_AC, R_CMP, R_CMP);
 				jmp_instruction = OP3(I_BZ, R_CMP, R_AC, JMP_REL);
@@ -676,6 +676,21 @@ long i_ins(long op, long rd, long r1, long r2, long r3)
 	}
 
 	if (oc & O_SHL) {
+		if (oc & O_NUM) {
+			if (oc == O_SHR) {
+				printf("O_SHR");
+				die("Shift right not yet supported");
+			}
+			else if (r2 < 16) {
+				int mul = 1;
+				for (int i = 0; i < r2; i++) {
+					mul *= 2;
+				}
+				i_load_acc_imm(mul);
+				op_typ(I_MUL, r1, R_AC, rd);
+				return 0;
+			}
+		}
 		die("Shift not yet supported");
 		return 0;
 	}
