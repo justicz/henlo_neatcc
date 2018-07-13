@@ -147,15 +147,43 @@ static long i_jmp(long op, long r1, long r2)
 			i_cpy_reg(r2, R_AC);
 		}
 
-		// do the comparison and store the result into R_CMP
-		if (comparison_type == 2) { // eq
-			op_typ(I_XOR, r1, R_AC, R_CMP);
-			jmp_instruction = OP3(I_BZ, R_CMP, R_AC, JMP_REL);
-		} else if (comparison_type == 3) { // ne
-			op_typ(I_XOR, r1, R_AC, R_AC);
-			jmp_instruction = OP3(I_BNZ, R_CMP, R_AC, JMP_REL);
+		if (is_signed || comparison_type == 2 || comparison_type == 3) {
+			// do the comparison and store the result into R_CMP
+			if (comparison_type == 0) { // lt
+				op_typ(I_NEG, R_AC, R_CMP, 0);
+				op_typ(I_ADD, r1, R_CMP, R_CMP); // R_CMP = r1 - r2. branch if R_CMP < 0
+				i_load_acc_imm(0x8000);
+				op_typ(I_AND, R_AC, R_CMP, R_CMP);
+				jmp_instruction = OP3(I_BNZ, R_CMP, R_AC, JMP_REL);
+			} else if (comparison_type == 1) { // ge
+				op_typ(I_NEG, R_AC, R_CMP, 0);
+				op_typ(I_ADD, r1, R_CMP, R_CMP); // R_CMP = r1 - r2. branch if R_CMP !< 0
+				i_load_acc_imm(0x8000);
+				op_typ(I_AND, R_AC, R_CMP, R_CMP);
+				jmp_instruction = OP3(I_BZ, R_CMP, R_AC, JMP_REL);
+			}	else if (comparison_type == 2) { // eq
+				op_typ(I_XOR, r1, R_AC, R_CMP);
+				jmp_instruction = OP3(I_BZ, R_CMP, R_AC, JMP_REL);
+			} else if (comparison_type == 3) { // ne
+				op_typ(I_XOR, r1, R_AC, R_CMP);
+				jmp_instruction = OP3(I_BNZ, R_CMP, R_AC, JMP_REL);
+			} else if (comparison_type == 4) { // le
+				op_typ(I_NEG, r1, R_CMP, 0);
+				op_typ(I_ADD, R_AC, R_CMP, R_CMP); // R_CMP = r2 - r1. branch if R_CMP < 0
+				i_load_acc_imm(0x8000);
+				op_typ(I_AND, R_AC, R_CMP, R_CMP);
+				jmp_instruction = OP3(I_BZ, R_CMP, R_AC, JMP_REL);
+			} else if (comparison_type == 5) { // gt
+				op_typ(I_NEG, r1, R_CMP, 0);
+				op_typ(I_ADD, R_AC, R_CMP, R_CMP); // R_CMP = r2 - r1. branch if R_CMP < 0
+				i_load_acc_imm(0x8000);
+				op_typ(I_AND, R_AC, R_CMP, R_CMP);
+				jmp_instruction = OP3(I_BNZ, R_CMP, R_AC, JMP_REL);
+			} else {
+				die("unsupported jcc type %d", comparison_type);
+			}
 		} else {
-			die("unsupported jcc type %d", comparison_type);
+			die("unsigned inequalities not yet supported");
 		}
 
 		// Load jump offset into R_AC
