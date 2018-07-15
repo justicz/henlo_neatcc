@@ -33,6 +33,7 @@
 #define I_JMP		0xb
 #define I_BZ		0xc
 #define I_BNZ		0xd
+#define I_STO		0xe
 
 /* Henlo flags */
 #define JMP_ABS	0
@@ -48,6 +49,8 @@
 
 // oooo||r1||r2||flag||xxxxx
 #define OP3(op, r1, r2, fl)	((((op) & 0xf) << 12) | (((r1) & 0x7) << 9) | (((r2) & 0x7) << 6) | (((fl) & 0x1) << 5)) 
+
+#define OP4(op, r1, r2, r3, fl1, fl2, fl3)	((((op) & 0xf) << 12) | (((r1) & 0x7) << 9) | (((r2) & 0x7) << 6) | (((r3) & 0x7) << 3) | (((fl1) & 0x1) << 2) | (((fl2) & 0x1) << 1) | ((fl3) & 0x1))
 
 #define HIGH(i) ((i >> 8) & 0xFF)
 #define LOW(i) ((i) & 0xFF)
@@ -109,6 +112,16 @@ static long op_typ(int op, int r1, int r2, int r3) {
 	return 2;
 }
 
+static long op_add(int op, int r1, int r2, int r3, int fl1, int fl2) {
+	oi(OP4(op, r1, r2, r3, fl1, fl2, 0), 2);
+	return 2;
+}
+
+static long op_rrf(int op, int r1, int r2, int fl1) {
+	oi(OP3(op, r1, r2, fl1), 2);
+	return 2;
+}
+
 static long op_imm(int op, int r1, int imm) {
 	oi(OP2(op, r1, imm), 2);
 	return 2;
@@ -137,7 +150,7 @@ static long i_jmp(long op, long r1, long r2)
 	} else if (op & O_JCC) {
 		// lt, ge, eq, ne, le, gt
 		int comparison_type = op & 0x0f;
-		int is_signed = O_T(op) & T_MSIGN;
+		int is_signed = O_T(op) & T_MSIGN ? 1 : 0;
 		long jmp_instruction = 0;
 
 		// r2/const -> R_AC
@@ -147,43 +160,47 @@ static long i_jmp(long op, long r1, long r2)
 			i_cpy_reg(r2, R_AC);
 		}
 
-		if (is_signed || comparison_type == 2 || comparison_type == 3) {
-			// do the comparison and store the result into R_CMP
-			if (comparison_type == 0) { // lt
-				op_typ(I_NEG, R_AC, R_CMP, 0);
-				op_typ(I_ADD, r1, R_CMP, R_CMP); // R_CMP = r1 - r2. branch if R_CMP < 0
-				i_load_acc_imm(0x8000);
-				op_typ(I_AND, R_AC, R_CMP, R_CMP);
-				jmp_instruction = OP3(I_BNZ, R_CMP, R_AC, JMP_REL);
-			} else if (comparison_type == 1) { // ge
-				op_typ(I_NEG, R_AC, R_CMP, 0);
-				op_typ(I_ADD, r1, R_CMP, R_CMP); // R_CMP = r1 - r2. branch if R_CMP >= 0
-				i_load_acc_imm(0x8000);
-				op_typ(I_AND, R_AC, R_CMP, R_CMP);
-				jmp_instruction = OP3(I_BZ, R_CMP, R_AC, JMP_REL);
-			}	else if (comparison_type == 2) { // eq
-				op_typ(I_XOR, r1, R_AC, R_CMP);
-				jmp_instruction = OP3(I_BZ, R_CMP, R_AC, JMP_REL);
-			} else if (comparison_type == 3) { // ne
-				op_typ(I_XOR, r1, R_AC, R_CMP);
-				jmp_instruction = OP3(I_BNZ, R_CMP, R_AC, JMP_REL);
-			} else if (comparison_type == 4) { // le
-				op_typ(I_NEG, r1, R_CMP, 0);
-				op_typ(I_ADD, R_AC, R_CMP, R_CMP); // R_CMP = r2 - r1. branch if R_CMP >= 0
-				i_load_acc_imm(0x8000);
-				op_typ(I_AND, R_AC, R_CMP, R_CMP);
-				jmp_instruction = OP3(I_BZ, R_CMP, R_AC, JMP_REL);
-			} else if (comparison_type == 5) { // gt
-				op_typ(I_NEG, r1, R_CMP, 0);
-				op_typ(I_ADD, R_AC, R_CMP, R_CMP); // R_CMP = r2 - r1. branch if R_CMP < 0
-				i_load_acc_imm(0x8000);
-				op_typ(I_AND, R_AC, R_CMP, R_CMP);
-				jmp_instruction = OP3(I_BNZ, R_CMP, R_AC, JMP_REL);
-			} else {
-				die("unsupported jcc type %d", comparison_type);
-			}
+		int overflow_jmp = OP3(I_BNZ, R_CMP, R_AC, JMP_REL);
+		int no_overflow_jmp = OP3(I_BZ, R_CMP, R_AC, JMP_REL);
+
+		// do the comparison and store the result into R_CMP
+		if (comparison_type == 0) { // lt
+			// branch iff a < b
+			// compute c = a + (-b)
+			// if c is negative, we should branch
+			// hardware deals with 0x8000 edge cases
+			op_rrf(I_NEG, R_AC, R_CMP, is_signed);
+			op_add(I_ADD, r1, R_CMP, R_CMP, is_signed, 1); // R_CMP = r1 - r2. branch if R_CMP < 0
+			op_typ(I_STO, R_CMP, 0, 0);
+			jmp_instruction = overflow_jmp;
+		} else if (comparison_type == 1) { // ge
+			op_rrf(I_NEG, R_AC, R_CMP, is_signed);
+			op_add(I_ADD, r1, R_CMP, R_CMP, is_signed, 1); // R_CMP = r1 - r2. branch if R_CMP >= 0
+			op_typ(I_STO, R_CMP, 0, 0);
+			jmp_instruction = no_overflow_jmp;
+		}	else if (comparison_type == 2) { // eq
+			op_typ(I_XOR, r1, R_AC, R_CMP);
+			jmp_instruction = OP3(I_BZ, R_CMP, R_AC, JMP_REL);
+		} else if (comparison_type == 3) { // ne
+			op_typ(I_XOR, r1, R_AC, R_CMP);
+			jmp_instruction = OP3(I_BNZ, R_CMP, R_AC, JMP_REL);
+		} else if (comparison_type == 4) { // le
+			// branch iff a <= b
+			// equivalently, DON'T branch if b < a
+			// compute c = b + (-a)
+			// branch if c NOT negative
+			// hardware deals with 0x8000 edge cases
+			op_rrf(I_NEG, r1, R_CMP, is_signed);
+			op_add(I_ADD, R_AC, R_CMP, R_CMP, is_signed, 1); // R_CMP = r2 - r1. branch if R_CMP >= 0
+			op_typ(I_STO, R_CMP, 0, 0);
+			jmp_instruction = no_overflow_jmp;
+		} else if (comparison_type == 5) { // gt
+			op_rrf(I_NEG, r1, R_CMP, is_signed);
+			op_add(I_ADD, R_AC, R_CMP, R_CMP, is_signed, 1); // R_CMP = r2 - r1. branch if R_CMP < 0
+			op_typ(I_STO, R_CMP, 0, 0);
+			jmp_instruction = overflow_jmp;
 		} else {
-			die("unsigned inequalities not yet supported");
+			die("unsupported signed jcc type %d", comparison_type);
 		}
 
 		// Load jump offset into R_AC
