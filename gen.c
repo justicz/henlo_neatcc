@@ -212,6 +212,7 @@ static void ra_map(int *rd, int *r1, int *r2, int *r3, long *mt)
 	if (oc & O_CALL)
 		for (i = 0; i < MIN(c->a3, N_ARGS); i++)
 			all |= (1 << argregs[i]);
+
 	/* instructions on locals can be simplified */
 	if (oc & O_LOC) {
 		if (oc & O_MOV)
@@ -221,6 +222,7 @@ static void ra_map(int *rd, int *r1, int *r2, int *r3, long *mt)
 	}
 	if (i_reg(c->op, &md, &m1, &m2, &m3, mt))
 		die("neatcc: instruction %08lx not supported\n", c->op);
+
 	/*
 	 * the registers used in global register allocation should not
 	 * be used in the last instruction of a basic block.
@@ -269,11 +271,6 @@ static void ra_map(int *rd, int *r1, int *r2, int *r3, long *mt)
 static long iv_rank(long iv)
 {
 	int i;
-  /*printf("live: ");
-	for (i = 0; i < LEN(ra_live); i++)
-    printf("%lu ", ra_live[i]);
-  printf("\n");
-  printf("live value should be: %lu\n", iv);*/
 	for (i = 0; i < LEN(ra_live); i++)
 		if (ra_live[i] == iv)
 			return i;
@@ -329,9 +326,9 @@ static void val_tomem(long val, int reg)
 /* move the value to the stack */
 static void ra_spill(int reg)
 {
-  //printf("spill: %d\n", reg); fflush(stdout);
+	//printf("spill: %d\n", reg); fflush(stdout);
 	if (ra_vmap[reg] >= 0) {
-    val_tomem(ra_vmap[reg], reg);
+		val_tomem(ra_vmap[reg], reg);
 		ra_vmap[reg] = -1;
 	}
 	if (ra_lmap[reg] >= 0) {
@@ -639,7 +636,7 @@ static void ic_reset(void)
 	loc_pos = I_LOC0;
 }
 
-void o_func_beg(char *name, int argc, int global, int varg)
+Elf_Sym *o_func_beg(char *name, int argc, int global, int varg)
 {
 	int i;
 	func_argc = argc;
@@ -648,7 +645,7 @@ void o_func_beg(char *name, int argc, int global, int varg)
 	ic_reset();
 	for (i = 0; i < argc; i++)
 		loc_add(I_ARG0 + -i * ULNG);
-	out_def(name, (global ? OUT_GLOB : 0) | OUT_CS, mem_len(&cs), 0);
+	return out_def(name, (global ? OUT_GLOB : 0) | OUT_CS, mem_len(&cs), 0);
 }
 
 void o_code(char *name, char *c, long c_len)
@@ -657,7 +654,7 @@ void o_code(char *name, char *c, long c_len)
 	mem_put(&cs, c, c_len);
 }
 
-void o_func_end(void)
+void o_func_end(Elf_Sym *sym)
 {
 	long spsub;
 	long sargs = 0;
@@ -702,8 +699,9 @@ void o_func_end(void)
 	for (i = 0; i < rcnt; i++)	/* adding the relocations */
 		out_rel(rsym[i], rflg[i], roff[i] + mem_len(&cs));
 	mem_put(&cs, c, c_len);		/* appending function code */
+	sym->st_size = c_len; /* setting symbol length */
 
-  free(c);
+	free(c);
 	free(rsym);
 	free(rflg);
 	free(roff);
@@ -718,15 +716,15 @@ void o_write(int fd)
 {
 	i_done();
 
-  FILE *fp;
-  fp = fopen("/tmp/henlo.bin", "w");
-  int cl = mem_len(&cs);
-  printf("c_len: %d\n", cl);
-  char *buf = mem_buf(&cs);
-  for (int i = 0; i < cl; i++) {
-    fprintf(fp, "%c", buf[i]);
-  }
-  fclose(fp);
+	FILE *fp;
+	fp = fopen("/tmp/henlo.bin", "w");
+	int cl = mem_len(&cs);
+	printf("c_len: %d\n", cl);
+	char *buf = mem_buf(&cs);
+	for (int i = 0; i < cl; i++) {
+		fprintf(fp, "%c", buf[i]);
+	}
+	fclose(fp);
 
 	out_write(fd, mem_buf(&cs), mem_len(&cs), mem_buf(&ds), mem_len(&ds));
 	free(loc_off);

@@ -28,6 +28,33 @@
 #define MIN(a, b)	((a) < (b) ? (a) : (b))
 #define MAX(a, b)	((a) < (b) ? (b) : (a))
 
+#include <elf.h>
+
+/* simplified elf struct and macro names */
+#if LONGSZ == 8
+#  define USERELA	1
+#  define Elf_Ehdr	Elf64_Ehdr
+#  define Elf_Shdr	Elf64_Shdr
+#  define Elf_Sym	Elf64_Sym
+#  define Elf_Rel	Elf64_Rela
+#  define ELF_ST_INFO	ELF64_ST_INFO
+#  define ELF_ST_BIND	ELF64_ST_BIND
+#  define ELF_R_SYM	ELF64_R_SYM
+#  define ELF_R_TYPE	ELF64_R_TYPE
+#  define ELF_R_INFO	ELF64_R_INFO
+#else
+#  define USERELA	0
+#  define Elf_Ehdr	Elf32_Ehdr
+#  define Elf_Shdr	Elf32_Shdr
+#  define Elf_Sym	Elf32_Sym
+#  define Elf_Rel	Elf32_Rel
+#  define ELF_ST_INFO	ELF32_ST_INFO
+#  define ELF_ST_BIND	ELF32_ST_BIND
+#  define ELF_R_SYM	ELF32_R_SYM
+#  define ELF_R_TYPE	ELF32_R_TYPE
+#  define ELF_R_INFO	ELF32_R_INFO
+#endif
+
 void *mextend(void *old, long oldsz, long newsz, long memsz);
 void die(char *msg, ...);
 void err(char *fmt, ...);
@@ -174,8 +201,8 @@ void o_dscpy(long addr, void *buf, long len);
 void o_dsset(char *name, long off, long bt);
 void o_bsnew(char *name, long size, int global);
 /* functions */
-void o_func_beg(char *name, int argc, int global, int vararg);
-void o_func_end(void);
+Elf_Sym *o_func_beg(char *name, int argc, int global, int vararg);
+void o_func_end(Elf_Sym *sym);
 void o_code(char *name, char *c, long c_len);
 /* output */
 void o_write(int fd);
@@ -296,7 +323,7 @@ extern int argregs[];
 void out_init(long flags);
 
 long out_sym(char *name);
-void out_def(char *name, long flags, long off, long len);
+Elf_Sym * out_def(char *name, long flags, long off, long len);
 void out_rel(long id, long flags, long off);
 
 void out_write(int fd, char *cs, long cslen, char *ds, long dslen);

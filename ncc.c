@@ -1602,8 +1602,9 @@ static void readfunc(struct name *name, int flags)
 {
 	struct funcinfo *fi = &funcs[name->type.id];
 	int i;
+	Elf_Sym *sym;
 	strcpy(func_name, fi->name);
-	o_func_beg(func_name, fi->nargs, F_GLOBAL(flags), fi->varg);
+	sym = o_func_beg(func_name, fi->nargs, F_GLOBAL(flags), fi->varg);
 	for (i = 0; i < fi->nargs; i++) {
 		struct name arg = {"", "", fi->args[i], o_arg2loc(i)};
 		strcpy(arg.name, fi->argnames[i]);
@@ -1612,7 +1613,7 @@ static void readfunc(struct name *name, int flags)
 	label = 0;
 	label_n = 0;
 	readstmt();
-	o_func_end();
+	o_func_end(sym);
 	func_name[0] = '\0';
 	locals_n = 0;
 }

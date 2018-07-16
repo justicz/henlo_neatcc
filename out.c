@@ -17,31 +17,6 @@
 #define SEC_BSS			7
 #define NSECS			8
 
-/* simplified elf struct and macro names */
-#if LONGSZ == 8
-#  define USERELA	1
-#  define Elf_Ehdr	Elf64_Ehdr
-#  define Elf_Shdr	Elf64_Shdr
-#  define Elf_Sym	Elf64_Sym
-#  define Elf_Rel	Elf64_Rela
-#  define ELF_ST_INFO	ELF64_ST_INFO
-#  define ELF_ST_BIND	ELF64_ST_BIND
-#  define ELF_R_SYM	ELF64_R_SYM
-#  define ELF_R_TYPE	ELF64_R_TYPE
-#  define ELF_R_INFO	ELF64_R_INFO
-#else
-#  define USERELA	0
-#  define Elf_Ehdr	Elf32_Ehdr
-#  define Elf_Shdr	Elf32_Shdr
-#  define Elf_Sym	Elf32_Sym
-#  define Elf_Rel	Elf32_Rel
-#  define ELF_ST_INFO	ELF32_ST_INFO
-#  define ELF_ST_BIND	ELF32_ST_BIND
-#  define ELF_R_SYM	ELF32_R_SYM
-#  define ELF_R_TYPE	ELF32_R_TYPE
-#  define ELF_R_INFO	ELF32_R_INFO
-#endif
-
 static Elf_Ehdr ehdr;
 static Elf_Shdr shdr[NSECS];
 static Elf_Sym *syms;
@@ -145,7 +120,7 @@ void out_init(long flags)
 }
 
 /* return a symbol identifier */
-void out_def(char *name, long flags, long off, long len)
+Elf_Sym *out_def(char *name, long flags, long off, long len)
 {
 	Elf_Sym *sym = put_sym(name);
 	int type = (flags & OUT_CS) ? STT_FUNC : STT_OBJECT;
@@ -159,6 +134,7 @@ void out_def(char *name, long flags, long off, long len)
 	sym->st_info = ELF_ST_INFO(bind, type);
 	sym->st_value = off;
 	sym->st_size = len;
+	return sym;
 }
 
 long out_sym(char *name)
