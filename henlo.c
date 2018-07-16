@@ -280,6 +280,37 @@ static void i_mul(long rd, long r1, long r2)
 	op_typ(I_MUL, r1, r2, rd);
 }
 
+static void i_pop(long r1)
+{
+	i_load_acc_imm(1);
+	op_typ(I_ADD, R_SP, R_AC, R_SP);
+	op_typ(I_LD, R_SP, r1, 0);
+}
+
+static void i_push(long r1)
+{
+	op_typ(I_ST, r1, R_SP, 0);
+	i_load_acc_imm(1);
+	op_typ(I_NEG, R_AC, R_AC, 0);
+	op_typ(I_ADD, R_SP, R_AC, R_SP);
+}
+
+static void regs_save(long sregs)
+{
+	int i;
+	for (i = 0; i < N_REGS; i++)
+		if (((1 << i) & R_TMPS) & sregs)
+			i_push(i);
+}
+
+static void regs_load(long sregs)
+{
+	int i;
+	for (i = N_REGS - 1; i >= 0; --i)
+		if (((1 << i) & R_TMPS) & sregs)
+			i_pop(i);
+}
+
 static void i_add(long op, long rd, long r1, long r2)
 {
 	if (op == O_SUB) {
@@ -371,8 +402,52 @@ static int regs_count(long regs)
 
 void i_wrap(int argc, long sargs, long spsub, int initfp, long sregs, long sregs_pos)
 {
+	void *old_body;
+	long old_body_len;
+	long diff;
+	int i;
+
+	// Add return label to end of function so ret can jump to epilogue
 	lab_add(0);
-	os("\xff\xff", 2);
+
+	old_body_len = mem_len(&cs);
+
+	// mem_get zeroes out the cs struct, but does not free old_body
+	old_body = mem_get(&cs);
+
+	if (initfp) {
+		i_push(R_FP);
+		i_cpy_reg(R_SP, R_FP);
+	}
+
+	if (sregs) {
+		regs_save(sregs);
+	}
+
+	diff = mem_len(&cs);
+	mem_put(&cs, old_body, old_body_len);
+	free(old_body);
+
+	if (sregs) {
+		regs_load(sregs);
+	}
+
+	if (initfp) {
+		i_cpy_reg(R_FP, R_SP);
+		i_pop(R_FP);
+	}
+
+	// Now that we've added a prologue, offsets should be bumped
+	for (i = 0; i < rel_n; i++) {
+		rel_off[i] += diff;
+		printf("Relocation @ %d\n", rel_off[i]);
+	}
+	for (i = 0; i < jmp_n; i++) {
+		jmp_off[i] += diff;
+	}
+	for (i = 0; i < lab_sz; i++) {
+		lab_loc[i] += diff;
+	}
 }
 
 void i_code(char **c, long *c_len, long **rsym, long **rflg, long **roff, long *rcnt)
@@ -716,12 +791,17 @@ long i_ins(long op, long rd, long r1, long r2, long r3)
 		if (oc == O_MUL) {
 			i_mul(rd, r1, r2);
 		}
-		if (oc == O_DIV) {}
-		if (oc == O_MOD) {}
+		if (oc == O_DIV) {
+			die("div");
+		}
+		if (oc == O_MOD) {
+			die("mod");
+		}
 		return 0;
 	}
 
 	if (oc & O_CMP) {
+		die("cmp");
 		if (oc & O_NUM) {}
 		else {}
 		return 0;
@@ -740,15 +820,18 @@ long i_ins(long op, long rd, long r1, long r2, long r3)
 	}
 
 	if (oc == O_CALL) {
+		die("nonsymbolic call");
 		return 0;
 	}
 
 	if (oc == (O_CALL | O_SYM)) {
-		die("Calls not yet supported");
+		i_rel(r1, OUT_CS | OUT_RLREL, opos());
+		oi(0, 8);
 		return 0;
 	}
 
 	if (oc == (O_MOV | O_SYM)) {
+		die("symbolic move");
 		return 0;
 	}
 
@@ -764,10 +847,12 @@ long i_ins(long op, long rd, long r1, long r2, long r3)
 	}
 
 	if (oc == O_MSET) {
+		die("mset");
 		return 0;
 	}
 
 	if (oc == O_MCPY) {
+		die("mcpy");
 		return 0;
 	}
 
