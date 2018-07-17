@@ -313,14 +313,14 @@ static void regs_load(long sregs)
 
 static void i_add(long op, long rd, long r1, long r2)
 {
-	if (op == O_SUB) {
+	if (op & O_SUB) {
 		op_typ(I_NEG, r2, R_AC, 0);
 		op_typ(I_ADD, r1, R_AC, rd);
-	} else if (op == O_AND) {
+	} else if (op & O_AND) {
 		op_typ(I_AND, r1, r2, rd);
-	} else if (op == O_OR) {
+	} else if (op & O_OR) {
 		op_typ(I_OR, r1, r2, rd);
-	} else if (op == O_XOR) {
+	} else if (op & O_XOR) {
 		op_typ(I_XOR, r1, r2, rd);
 	} else {
 		op_typ(I_ADD, r1, r2, rd);
@@ -330,12 +330,7 @@ static void i_add(long op, long rd, long r1, long r2)
 static void i_add_anyimm(long op, int rd, int r1, long imm)
 {
 	i_load_acc_imm(imm);
-
-	if (op == O_SUB) {
-		op_typ(I_NEG, R_AC, R_AC, 0);
-	}
-
-	op_typ(I_ADD, r1, R_AC, rd);
+	i_add(op, rd, r1, R_AC);
 }
 
 static void lab_add(long id)
@@ -615,16 +610,16 @@ int i_imm(long lim, long n)
 
 void print_op(long oc, long rd, long r1, long r2, long r3, long bt) {
 	if (oc & O_ADD) {
-		if (oc == O_SUB) {
+		if (oc & O_SUB) {
 			printf("O_SUB");
 		}
-		else if (oc == O_AND) {
-			printf("O_SUB");
+		else if (oc & O_AND) {
+			printf("O_AND");
 		}
-		else if (oc == O_OR) {
+		else if (oc & O_OR) {
 			printf("O_OR");
 		}
-		else if (oc == O_XOR) {
+		else if (oc & O_XOR) {
 			printf("O_XOR");
 		}
 		else {
