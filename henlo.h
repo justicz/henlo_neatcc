@@ -1,5 +1,5 @@
 /* architecture-dependent header for x86 */
-#define LONGSZ		2	/* word size */
+#define LONGSZ		1	/* word size */
 #define I_ARCH		"__henlo__"
 
 #define N_REGS		8	/* number of registers */
@@ -12,5 +12,5 @@
 #define REG_FP		4	/* frame pointer register */
 #define REG_SP		5	/* stack pointer register */
 
-#define I_ARG0		(-8)	/* offset of the first argument from FP */
+#define I_ARG0		(-3)	/* offset of the first argument from FP */
 #define I_LOC0		0	/* offset of the first local from FP */

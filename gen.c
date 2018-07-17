@@ -716,6 +716,7 @@ void o_write(int fd)
 {
 	i_done();
 
+  /*
 	FILE *fp;
 	fp = fopen("/tmp/henlo.bin", "w");
 	int cl = mem_len(&cs);
@@ -725,6 +726,7 @@ void o_write(int fd)
 		fprintf(fp, "%c", buf[i]);
 	}
 	fclose(fp);
+  */
 
 	out_write(fd, mem_buf(&cs), mem_len(&cs), mem_buf(&ds), mem_len(&ds));
 	free(loc_off);

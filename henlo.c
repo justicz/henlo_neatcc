@@ -436,11 +436,11 @@ void i_wrap(int argc, long sargs, long spsub, int initfp, long sregs, long sregs
 		i_cpy_reg(R_FP, R_SP);
 		i_pop(R_FP);
 	}
+	i_pop(R_PC);
 
 	// Now that we've added a prologue, offsets should be bumped
 	for (i = 0; i < rel_n; i++) {
 		rel_off[i] += diff;
-		printf("Relocation @ %d\n", rel_off[i]);
 	}
 	for (i = 0; i < jmp_n; i++) {
 		jmp_off[i] += diff;
@@ -510,8 +510,7 @@ long i_reg(long op, long *rd, long *r1, long *r2, long *r3, long *tmp)
 	*r1 = 0;
 	*r2 = 0;
 	*r3 = 0;
-	*tmp = R_TMPS;
-
+	*tmp = 0;
 	if (oc & O_MOV) {
 		*rd = R_TMPS;
 		if (oc & (O_NUM | O_SYM))
@@ -522,7 +521,7 @@ long i_reg(long op, long *rd, long *r1, long *r2, long *r3, long *tmp)
 	}
 	if (oc & O_ADD) {
 		*r1 = R_TMPS;
-		*r2 = R_TMPS;
+		*r2 = oc & O_NUM ? 16 : R_TMPS;
 		return 0;
 	}
 	if (oc & O_SHL) {
@@ -572,35 +571,34 @@ long i_reg(long op, long *rd, long *r1, long *r2, long *r3, long *tmp)
 		return 0;
 	}
 	if (oc == O_RET) {
-		*r1 = R_TMPS;
+		*r1 = (1 << REG_RET);
 		return 0;
 	}
 	if (oc & O_CALL) {
 		*rd = (1 << REG_RET);
 		*r1 = oc & O_SYM ? 0 : R_TMPS;
-		*tmp = 0;
+		*tmp = R_TMPS & ~R_PERM;
 		return 0;
 	}
 	if (oc & O_LD) {
 		*rd = R_TMPS;
 		*r1 = R_TMPS;
-		*r2 = oc & O_NUM ? 4 : R_TMPS;
+		*r2 = oc & O_NUM ? 8 : R_TMPS;
 		return 0;
 	}
 	if (oc & O_ST) {
 		*r1 = R_TMPS;
 		*r2 = R_TMPS;
-		*r3 = oc & O_NUM ? 4 : R_TMPS;
+		*r3 = oc & O_NUM ? 8 : R_TMPS;
 		return 0;
 	}
 	if (oc & O_JZ) {
 		*r1 = R_TMPS;
-		*r2 = oc & O_NUM ? 16 : R_TMPS;
 		return 0;
 	}
 	if (oc & O_JCC) {
 		*r1 = R_TMPS;
-		*r2 = oc & O_NUM ? 16 : R_TMPS;
+		*r2 = oc & O_NUM ? 8 : R_TMPS;
 		return 0;
 	}
 	if (oc == O_JMP) {
@@ -825,8 +823,22 @@ long i_ins(long op, long rd, long r1, long r2, long r3)
 	}
 
 	if (oc == (O_CALL | O_SYM)) {
+		// We want to store PC + 11 on the stack
+		op_typ(I_XOR, R_AC, R_AC, R_AC);
+		op_imm(I_ADDI, R_AC, 11);
+		op_typ(I_ADD, R_PC, R_AC, R_CMP); // R_CMP contains PC to save
+
+		// increment RSP and store PC to save
+		op_typ(I_XOR, R_AC, R_AC, R_AC);
+		op_imm(I_ADDI, R_AC, 1);
+		op_typ(I_NEG, R_AC, R_AC, 0);
+		op_typ(I_ADD, R_SP, R_AC, R_SP);
+		op_typ(I_ST, R_CMP, R_SP, 0);
+		op_typ(I_ADD, R_SP, R_AC, R_SP);
+
 		i_rel(r1, OUT_CS | OUT_RLREL, opos());
 		oi(0, 8);
+		oi(OP3(I_JMP, R_AC, 0, JMP_ABS), 2);
 		return 0;
 	}
 
